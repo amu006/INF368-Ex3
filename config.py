@@ -10,3 +10,4 @@ last       = 0
 learn_rate = 0.01
 lr_decay   = 0.9
 iterations = 5
+    

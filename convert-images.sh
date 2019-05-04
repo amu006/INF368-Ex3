@@ -6,7 +6,7 @@ shopt -s failglob
 # resize to 299x299, but keep image size
 # drop -resize if zooming with crop is better (but maybe not?)
 
-BASE=../../../data/ex1/2g/ZooScanSet/imgs/
+BASE=../../../data/ex1/2g/imgs/
 OUT=data
 
 ls "$BASE" | tail -n +14 | while read dir; do

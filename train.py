@@ -6,7 +6,7 @@ from keras.optimizers import SGD
 
 import os
 
-from create_model import create_base_network, in_dim, tripletize, std_triplet_loss
+from create_model import create_base_network, in_dim, tripletize, std_triplet_loss, alt_triplet_loss
 from generators import triplet_generator
 import testing as T
 
@@ -40,8 +40,10 @@ else:
     base_model = load_model(save_name(last))
 
 model = tripletize(base_model)
+#model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
+#             loss=std_triplet_loss())
 model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
-              loss=std_triplet_loss())
+             loss=alt_triplet_loss())
 
 def avg(x):
     return sum(x)/len(x)

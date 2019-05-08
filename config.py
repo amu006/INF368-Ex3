@@ -1,7 +1,7 @@
 
-train_dir = 'data/train'
-val_dir   = 'data/validate'
-test_dir  = 'data/test'
+train_dir = 'train'
+val_dir   = 'validate'
+test_dir  = 'test'
 
 batch_size = 20
 logfile    = 'train.log'

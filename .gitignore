@@ -4,8 +4,10 @@ data/
 train/
 validate/
 test/
+.kernelfiles
 *.py[cod]
 *$py.class
+*.model
 
 # C extensions
 *.so

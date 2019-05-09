@@ -2,7 +2,7 @@
 # and validation data in data/validation
 from keras.models import load_model
 from keras.callbacks import CSVLogger
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adam
 
 import os
 
@@ -11,6 +11,8 @@ from generators import triplet_generator
 import testing as T
 
 import config as C
+
+from am_plankton import set_trainable_layers
 
 last = C.last
 
@@ -24,7 +26,11 @@ def log(s):
 # Use log to file
 logger = CSVLogger(C.logfile, append=True, separator='\t')
 
-def train_step():
+def train_step(trainable_n=None):
+    if not trainable_n is None:
+        base_model = model.layers[-2]
+        set_trainable_layers(base_model, n=trainable_n)
+        compile_model(model)
     model.fit_generator(
         triplet_generator(C.batch_size, None, C.train_dir), steps_per_epoch=1000, epochs=C.iterations,
         callbacks=[logger],
@@ -40,10 +46,15 @@ else:
     base_model = load_model(save_name(last))
 
 model = tripletize(base_model)
-#model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
-#             loss=std_triplet_loss())
-model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
-             loss=alt_triplet_loss())
+
+def compile_model(model):
+    #model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
+    #             loss=std_triplet_loss())
+    model.compile(optimizer=Adam(),
+                 loss=alt_triplet_loss())
+    return
+    
+compile_model(model)
 
 def avg(x):
     return sum(x)/len(x)

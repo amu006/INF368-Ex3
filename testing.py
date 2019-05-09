@@ -52,7 +52,7 @@ def centroid_distances(vectors, outfile=sys.stdout):
            print(c[:25].ljust(26),' average radius: %.4f worst case diameter: %.4f' % (sum(ds)/len(ds), max(ds)), file=outfile)
     print('\nCentroid distances',file=outfile)
     for c in res:
-        print(c[25].ljust(26),end=': ', file=outfile)
+        print(c[:25].ljust(26),end=': ', file=outfile)
         for n in res:
             print('  %.3f' % (dist(res[c],res[n])), end='', file=outfile)
         print(file=outfile)
@@ -144,14 +144,14 @@ def knn_test(model, rdir, tdir, k=5):
 def run_test(model, tdir=C.test_dir, outfile=sys.stdout):
     vecs = get_vectors(model,tdir)
 
-#    print('Centroid dists:')
-#    centroid_distances(vecs)
+    print('Centroid dists:')
+    centroid_distances(vecs)
 
-#    print('Summarize:')
-#    summarize(vecs)
+    print('Summarize:')
+    summarize(vecs)
 
     c = count_nearest_centroid(vecs)
     accuracy_counts(c, outfile=outfile)
 
-#    print('Confusion matrix:')
-#    confusion_counts(c)
+    print('Confusion matrix:')
+    confusion_counts(c)

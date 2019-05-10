@@ -1,6 +1,6 @@
 from keras.applications.inception_v3 import InceptionV3
 from keras.models import Sequential, Model, Input, load_model
-from keras.layers import Dense, Activation, Flatten, GlobalAveragePooling2D, Concatenate, Lambda
+from keras.layers import Dense, Activation, Flatten, GlobalAveragePooling2D, Concatenate, Lambda, Dropout
 from keras import backend as K
 
 # Load Inception minus the final prediction layer
@@ -8,7 +8,7 @@ from keras import backend as K
 in_dim = (299,299,3)
 out_dim = 64
 
-def create_base_network(input_dim):
+def create_base_network(input_dim, dropout=0.3):
     base_model = InceptionV3(weights='imagenet', include_top=False, input_shape=input_dim)
     # Use 299x299x1 since monochromatic?
 
@@ -16,6 +16,7 @@ def create_base_network(input_dim):
 
     # Add a new 128-bit output vector
     tmp = GlobalAveragePooling2D()(base_model.output)
+    tmp = Dropout(dropout)(tmp)
     bitvector = Dense(out_dim, activation='sigmoid')(tmp)
     return Model(inputs=base_model.input, outputs=bitvector)
 

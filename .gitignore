@@ -4,6 +4,7 @@ data/
 train/
 validate/
 test/
+model/
 .kernelfiles
 *.py[cod]
 *$py.class

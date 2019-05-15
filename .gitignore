@@ -1,10 +1,15 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+
+models/
+obj/
+log/
+
 data/
 train/
 validate/
 test/
-model/
+
 .kernelfiles
 *.py[cod]
 *$py.class

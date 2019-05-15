@@ -18,7 +18,7 @@ from am_plankton import set_trainable_layers
 last = C.last
 
 def save_name(i):
-    return ('models/epoch_'+str(i)+'.model')
+    return (os.path.join(C.model_dir,'epoch_'+str(i)+'.model'))
 
 def log(s):
     with open(C.logfile, 'a') as f:
@@ -45,19 +45,19 @@ def compile_model(model, optimizer=Adam()):
     #model.compile(optimizer=SGD(lr=C.learn_rate, momentum=0.9),
     #             loss=std_triplet_loss())
     model.compile(optimizer=optimizer,
-                 loss=alt_triplet_loss())
+                 loss=std_triplet_loss())
     return 'Model compiled with lr={}'.format(Keval(optimizer.lr))        
 
 if last==0:
     log('Creating base network from scratch.')
-    if not os.path.exists('models'):
-        os.makedirs('models')
+    if not os.path.exists(C.model_dir):
+        os.makedirs(C.model_dir)
     base_model = create_base_network(in_dim)
     C.learn_rate = C.learn_rate_initial
 else:
     log('Loading model:'+save_name(last))
     base_model = load_model(save_name(last))
-    C.learn_rate = C.learn_rate_full
+    C.learn_rate = C.learn_rate_subsequent
 
 optimizer = Adam(lr=C.learn_rate)
 model = tripletize(base_model)
@@ -70,9 +70,9 @@ for v in vs:
 
 for i in range(last+1, last+11):
     log('Starting step '+str(i)+'/'+str(last+10)+' lr='+str(C.learn_rate))
-    if i==1:
+    if i==1: #first step: train top layer only
         train_step(trainable_n=1, optimizer=optimizer)
-    elif i==2:
+    elif i==2: #second step: unlock and train full model
         C.learn_rate = C.learn_rate_full
         optimizer = Adam(lr=C.learn_rate)
         train_step(trainable_n=999, optimizer=optimizer) #unlock all layers
@@ -82,11 +82,12 @@ for i in range(last+1, last+11):
     base_model.save(save_name(i))
 
     vs = T.get_vectors(base_model, C.val_dir)
+    T.save_obj(vs, os.path.join(C.obj_dir, 'val_pred_'+str(i)))
     c = T.count_nearest_centroid(vs)
     log('Summarizing '+str(i))
-    with open('summarize.'+str(i)+'.log', 'w') as sumfile:
+    with open(os.path.join(C.log_dir, 'summarize.'+str(i)+'.log'), 'w') as sumfile:
         T.summarize(vs, outfile=sumfile)
-    with open('clusters.'+str(i)+'.log', 'w') as cfile:
+    with open(os.path.join(C.log_dir, 'clusters.'+str(i)+'.log'), 'w') as cfile:
         T.confusion_counts(c, outfile=cfile)
     c_tmp = {}
     r_tmp = {}

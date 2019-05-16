@@ -3,10 +3,10 @@ train_dir = 'train'
 val_dir   = 'validate'
 test_dir  = 'test'
 
-model_dir = 'models'
-obj_dir = 'obj'
-log_dir = 'log'
-logfile    = 'train.log'  #this is in base directory, so name it to reflect log_dir
+model_dir = 'models/111'
+obj_dir = 'obj/111'
+log_dir = 'log/111'
+logfile    = 'train111.log'  #this is in base directory, so name it to reflect log_dir
 
 
 batch_size = 20
@@ -23,3 +23,7 @@ learn_rate_initial = 1E-3
 learn_rate_subsequent = 1E-5  #for resuming training, match this to decayed lr from logfile!
 
 
+import os
+for d in [model_dir, obj_dir, log_dir]:
+    if not os.path.isdir(d):
+        os.makedirs(d)

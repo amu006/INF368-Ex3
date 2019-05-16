@@ -9,7 +9,6 @@ Visualisations for exercise 3
 
 import os
 import numpy as np
-import pickle
 from keras.models import load_model
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -341,23 +340,13 @@ plot_confusion_matrix(cmat,
                           cmap=None,
                           normalize=True)
 
-#Load model and pickle its validation predictions
-i = 25
-model_name = ('models/epoch_'+str(i)+'.model')
-save_model_predictions(model_name, tdir=C.val_dir, 
-                       ofile='val_pred_{}'.format(i))
+#Load all models and pickle their validation predictions
+model_names = os.listdir(C.model_dir)
+for model_name in model_names:
+    oname = model_name.split('.')[0]+'_val_pred'
+    T.save_model_predictions(os.path.join(C.model_dir,model_name), tdir=C.val_dir, 
+                       ofile=os.path.join(C.obj_dir,oname))
 
-def save_model_predictions(model_name, 
-                           tdir=C.val_dir, ofile='val_pred'):
-    """ 
-    Loads the specified model and predicts from data in tdir, 
-    then pickles the predictions
-    """
-    base_model = load_model(model_name)
-    vs = T.get_vectors(base_model, tdir)
-    T.save_obj(vs, ofile)
-    print('Predictions from {} --> {}'.format(model_name, ofile))
-    return
     
 
 vs = T.load_obj('vs')       

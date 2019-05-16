@@ -73,7 +73,7 @@ for i in range(last+1, last+11):
     if i==1: #first step: train top layer only
         train_step(trainable_n=1, optimizer=optimizer)
     elif i==2: #second step: unlock and train full model
-        C.learn_rate = C.learn_rate_full
+        C.learn_rate = C.learn_rate_subsequent
         optimizer = Adam(lr=C.learn_rate)
         train_step(trainable_n=999, optimizer=optimizer) #unlock all layers
     else:

@@ -2,9 +2,33 @@ import config as C
 
 from PIL import Image
 import numpy as np
+import pickle
 import sys
+from keras.models import load_model
 
 from generators import paste
+
+def save_obj(obj, fname ):
+    os.makedirs(os.path.dirname(fname), exist_ok=True)
+    with open(fname + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(name ):
+    with open(fname + '.pkl', 'rb') as f:
+        return pickle.load(f)
+
+def save_model_predictions(model_name, 
+                           tdir=C.val_dir, ofile='val_pred'):
+    """ 
+    Loads the specified model and predicts from data in tdir, 
+    then pickles the predictions
+    """
+    base_model = load_model(model_name)
+    vs = get_vectors(base_model, tdir)
+    save_obj(vs, ofile)
+    print('Predictions from {} --> {}'.format(model_name, ofile))
+    return
+
 
 def class_file(model, fname):
     img = np.array(Image.open(fname))/256

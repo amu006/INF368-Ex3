@@ -29,6 +29,8 @@ def avg(x):
 
 # Use log to file
 logger = CSVLogger(C.logfile, append=True, separator='\t')
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+                              patience=3, min_lr=1E-7)
 
 def train_step(trainable_n=None, optimizer=Adam()):
     if not trainable_n is None:
@@ -38,7 +40,7 @@ def train_step(trainable_n=None, optimizer=Adam()):
     model.fit_generator(
         triplet_generator(C.batch_size, None, C.train_dir), 
         steps_per_epoch=C.steps_per_epoch, epochs=C.epochs_per_step,
-        callbacks=[logger],
+        callbacks=[logger, reduce_lr],
         validation_data=triplet_generator(C.batch_size, None, C.val_dir), validation_steps=100)
         
 def compile_model(model, optimizer=Adam()):

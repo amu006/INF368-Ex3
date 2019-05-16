@@ -9,13 +9,18 @@ Visualisations for exercise 3
 
 import os
 import numpy as np
+from copy import deepcopy
 from keras.models import load_model
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from plotly.offline import plot
+import plotly.graph_objs as go
 import testing as T
 import config as C
 
 
+def Average(lst):  #average of a list
+    return sum(lst) / len(lst) 
 
 def read_clusters(ldir=None):
     """
@@ -99,6 +104,15 @@ def read_summaries(ldir=None):
                     this_file[ci][cj + 2]
     return res
 
+def read_validation_history(obj_dir=C.obj_dir):
+    """ load all pickled validation predictions """
+    obj_names = [o.split('.')[-2] for o in os.listdir(obj_dir)]
+    its = [int(name.split('_')[-1]) for name in obj_names] #iteration numbers
+    vect_hist = {}
+    for n, i in enumerate(its):
+        vect_hist[i] = dict_squeeze(T.load_obj(os.path.join(obj_dir, obj_names[n])))
+    return vect_hist
+
 def confusion_matrix(clusters, iteration):
     """
     Extracts a confusion matrix from cluster dictionary
@@ -113,6 +127,31 @@ def confusion_matrix(clusters, iteration):
         for j in range(len(classes)):
             cmat[i,j] = clusters[classes[i]][classes[j]][iteration]
     return cmat, classes
+
+def dict_squeeze(vectors):
+    """ 
+    Squeezes the lists in a vector dict (as returned by get_vectors)
+    into arrays for further analysis.
+    
+    Is idempotent
+    """
+    for c in vectors:
+        if type(vectors[c]) is list:
+            vectors[c] = np.squeeze(vectors[c])
+    return vectors
+
+def dict_unsqueeze(vectors):
+    """
+    Unsqueezes the arrays in a vector dict (result of dict_squeeze)
+    into lists of vectors (as returned by get_vectors)
+    
+    Is idempotent
+    """
+    for c in vectors:
+        if not type(vectors[c]) is list:
+            vectors[c] = [np.array(vectors[c][r,:]) for 
+                   r in range(vectors[c].shape[0])]
+    return vectors
         
 def collect_class_vs(vectors, classes=None):
     """ Collects vectors in given classes list together for analysis """
@@ -182,6 +221,13 @@ def plot_train_radii(summ):
     ax.set(xlabel='Iteration')
     ax.set(ylabel='radius')
     return fig
+
+def plot_train_radii_separation(summ):
+    """ 
+    Plots the average cluster radius and average distance to other clusters
+    during training
+    """
+    
     
 def plot_confusion_matrix(cm,
                           target_names,
@@ -272,9 +318,13 @@ def plot_class_vectors_scatter(vectors, classes, dims=[0,1,2]):
     ax = fig.add_subplot(111, projection='3d')
     #colours = ['blue', 'red', 'green']
     for i, c in enumerate(classes):
-        ax.scatter(vectors[c][:, dims[0]], 
-                   vectors[c][:, dims[1]], 
-                   vectors[c][:, dims[2]], color=colours[i%len(colours)])  
+        #if type(vectors[c]) is list:
+        #    tmp = np.squeeze(vectors[c])
+        #else:
+        tmp = vectors[c]
+        ax.scatter(tmp[:, dims[0]], 
+                   tmp[:, dims[1]], 
+                   tmp[:, dims[2]], color=colours[i%len(colours)])
     return fig
 
 def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
@@ -282,8 +332,6 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
     """
     Creates a 3D plotly plot of the given classes in dictionary of vectors
     """
-    from plotly.offline import plot
-    import plotly.graph_objs as go
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colours = prop_cycle.by_key()['color']
 
@@ -319,8 +367,9 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
             )
     fig = dict( data=[*scatter, *cluster], layout=layout )
     # Use py.iplot() for IPython notebook
-    plotly.offline.plot(fig, filename)
+    plot(fig, filename)
     return
+
 
 ################################################################s
 #demos:
@@ -331,6 +380,28 @@ summ = read_summaries()
 #Plot the training progression of cluster radii:
 plot_train_radii(summ)
 
+#Plot the average cluster radius compared to the average cluster separation:
+vh = read_validation_history(C.obj_dir) #is squeezed
+centroids = {}
+radii = {}
+distances = {}
+av_dist = {}
+for i in vh:
+    #unsqueeze as we go:
+    vh[i] = dict_unsqueeze(vh[i])
+    centroids[i] = {}
+    radii[i] = {}
+    distances[i] = {}
+    for c in vh[i]:
+        centroids[i][c] = T.centroid(vh[i][c])
+        radii[i][c] = T.radius(centroids[i][c], vh[i][c])
+    av_dist[i] = {}    
+    for c in vh[i]:
+        distances[i][c] = {}
+        for c2 in vh[i]:
+            distances[i][c][c2] = T.dist(centroids[i][c], centroids[i][c2])
+        av_dist[i][c] = Average([distances[i][c][c2]] for c2 in distances[i])
+
 #Plot a confusion matrix
 i = 20
 cmat, classes = confusion_matrix(clusters, i-1)
@@ -340,6 +411,20 @@ plot_confusion_matrix(cmat,
                           cmap=None,
                           normalize=True)
 
+#Plot the training loss over epochs:
+with open(os.path.join(C.log_dir, 'training.txt')) as f:
+    ll = f.readlines()
+loss_train = [float(l.split()[7]) for l in ll[1::2]]
+loss_val = [float(l.split()[10]) for l in ll[1::2]]
+epochs = [e for e in range(len(loss_train))]
+fig = plt.figure(figsize=(8, 8))
+ax = fig.add_subplot(111)
+ax.plot(epochs, loss_train, label='Training loss')
+ax.plot(epochs, loss_val, label='Validation loss')
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+ax.set(xlabel='Epoch')
+ax.set(ylabel='Loss')
+
 #Load all models and pickle their validation predictions
 model_names = os.listdir(C.model_dir)
 for model_name in model_names:
@@ -347,17 +432,27 @@ for model_name in model_names:
     T.save_model_predictions(os.path.join(C.model_dir,model_name), tdir=C.val_dir, 
                        ofile=os.path.join(C.obj_dir,oname))
 
+
     
 
-vs = T.load_obj('vs')       
-        
+vs = dict_squeeze(T.load_obj('obj/111/val_pred_11'))
+classes = [c for c in vs]        
 #plot some classes' first 3 dimensions    
-plot_class_vectors_scatter(vs_n, [classes[i] for i in range(16)], 
+plot_class_vectors_scatter(vs, [classes[i] for i in range(16)], 
                                   dims=[0,1,2])    
 
 #plot some classes along 3 principal axes of overall data
 ws_n = svd_project(vs)
 plot_class_vectors_scatter(ws_n, [classes[i] for i in range(16)])
-plot_class_vectors_plotly(ws_n, [classes[i] for i in range(16)])
+plot_class_vectors_plotly(ws_n, [classes[i] for i in range(10)])
+
+#Make an animation of validation predictions at different training epochs:
+#plotly.plotly.create_animations()
+import plotly.plotly as py
+from plotly.grid_objs import Grid, Column
+
+import time
+
+
 
 

@@ -9,11 +9,12 @@ Visualisations for exercise 3
 
 import os
 import numpy as np
+#from statistics import stdev
 from copy import deepcopy
 from keras.models import load_model
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from plotly.offline import plot
+from plotly.offline import download_plotlyjs, init_notebook_mode,  iplot, plot
 import plotly.graph_objs as go
 import testing as T
 import config as C
@@ -21,6 +22,13 @@ import config as C
 
 def Average(lst):  #average of a list
     return sum(lst) / len(lst) 
+
+def stdev(lst):
+    """ bug in the bloody statistics.stdev so do it myself """
+    a = Average(lst)
+    nlst = lst - a
+    s = sum([x**2 for x in nlst])
+    return np.sqrt(s/(len(lst)-1))
 
 def read_clusters(ldir=None):
     """
@@ -110,7 +118,7 @@ def read_validation_history(obj_dir=C.obj_dir):
     its = [int(name.split('_')[-1]) for name in obj_names] #iteration numbers
     vect_hist = {}
     for n, i in enumerate(its):
-        vect_hist[i] = dict_squeeze(T.load_obj(os.path.join(obj_dir, obj_names[n])))
+        vect_hist[int(i)] = dict_squeeze(T.load_obj(os.path.join(obj_dir, obj_names[n])))
     return vect_hist
 
 def confusion_matrix(clusters, iteration):
@@ -202,6 +210,25 @@ def svd_project(vs, reference_classes=None):
         
 
 #plotting:
+    
+def plot_epoch_losses(textfile=None):
+    """ Plot the training loss over epochs """
+    if textfile is None:
+        textfile = os.path.join(C.log_dir, 'training.txt')
+    with open(textfile) as f:
+        ll = f.readlines()
+    loss_train = [float(l.split()[7]) for l in ll[1::2]]
+    loss_val = [float(l.split()[10]) for l in ll[1::2]]
+    epochs = [e for e in range(len(loss_train))]
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
+    ax.plot(epochs, loss_train, label='Training loss')
+    ax.plot(epochs, loss_val, label='Validation loss')
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.set(xlabel='Epoch')
+    ax.set(ylabel='Loss')
+    return fig
+
 def plot_train_radii(summ):
     """
     Plots the radii of each cluster during training
@@ -222,12 +249,51 @@ def plot_train_radii(summ):
     ax.set(ylabel='radius')
     return fig
 
-def plot_train_radii_separation(summ):
+def plot_train_radii_separation(obj_dir=C.obj_dir, std=False):
     """ 
     Plots the average cluster radius and average distance to other clusters
     during training
     """
+    vh = read_validation_history(obj_dir) #is squeezed
+    centroids = {}
+    radii = {}
+    distances = {}
+    av_dist = {}
+    dist_all = {}
+    for i in vh:
+        #unsqueeze as we go:
+        vh[i] = dict_unsqueeze(vh[i])
+        centroids[i] = {}
+        radii[i] = {}
+        distances[i] = {}
+        dist_all[i] = []
+        for c in vh[i]:
+            centroids[i][c] = T.centroid(vh[i][c])
+            radii[i][c] = T.radius(centroids[i][c], vh[i][c])
+        av_dist[i] = {}    
+        for c in vh[i]:
+            distances[i][c] = {}
+            for c2 in vh[i]:
+                distances[i][c][c2] = T.dist(centroids[i][c], centroids[i][c2])
+                dist_all[i].append(distances[i][c][c2])
+            av_dist[i][c] = Average([distances[i][c][c2] for c2 in distances[i]])
+    its = [i for i in vh]
+    its.sort()
+    rads = [Average([radii[i][c] for c in radii[i]]) for i in its]
+    rads_std = [stdev([radii[i][c] for c in radii[i]]) for i in its]
+    dists = [Average([av_dist[i][c] for c in av_dist[i]]) for i in its]
     
+    dists_std = [stdev(dist_all[i]) for i in its]
+    fig, ax = plt.subplots(1)
+    ax.errorbar(its, rads, yerr=rads_std, linewidth=3, linestyle='dashed', 
+                label='Radii', elinewidth=1, capsize=10)
+    ax.errorbar(its, dists, yerr=dists_std, linewidth=3, 
+                label='Average separation', elinewidth=1, capsize=10)
+    ax.legend()
+    ax.set(xlabel='Iteration')
+    ax.set(ylabel='radius')  
+    fig.suptitle('Average class radii and separation during training', fontsize=16)
+    return fig
     
 def plot_confusion_matrix(cm,
                           target_names,
@@ -370,6 +436,9 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
     plot(fig, filename)
     return
 
+def plotly_animate():
+    return
+
 
 ################################################################s
 #demos:
@@ -381,26 +450,10 @@ summ = read_summaries()
 plot_train_radii(summ)
 
 #Plot the average cluster radius compared to the average cluster separation:
-vh = read_validation_history(C.obj_dir) #is squeezed
-centroids = {}
-radii = {}
-distances = {}
-av_dist = {}
-for i in vh:
-    #unsqueeze as we go:
-    vh[i] = dict_unsqueeze(vh[i])
-    centroids[i] = {}
-    radii[i] = {}
-    distances[i] = {}
-    for c in vh[i]:
-        centroids[i][c] = T.centroid(vh[i][c])
-        radii[i][c] = T.radius(centroids[i][c], vh[i][c])
-    av_dist[i] = {}    
-    for c in vh[i]:
-        distances[i][c] = {}
-        for c2 in vh[i]:
-            distances[i][c][c2] = T.dist(centroids[i][c], centroids[i][c2])
-        av_dist[i][c] = Average([distances[i][c][c2]] for c2 in distances[i])
+plot_train_radii_separation(C.obj_dir)
+
+#Plot the training loss over epochs:
+plot_epoch_losses()        
 
 #Plot a confusion matrix
 i = 20
@@ -411,19 +464,8 @@ plot_confusion_matrix(cmat,
                           cmap=None,
                           normalize=True)
 
-#Plot the training loss over epochs:
-with open(os.path.join(C.log_dir, 'training.txt')) as f:
-    ll = f.readlines()
-loss_train = [float(l.split()[7]) for l in ll[1::2]]
-loss_val = [float(l.split()[10]) for l in ll[1::2]]
-epochs = [e for e in range(len(loss_train))]
-fig = plt.figure(figsize=(8, 8))
-ax = fig.add_subplot(111)
-ax.plot(epochs, loss_train, label='Training loss')
-ax.plot(epochs, loss_val, label='Validation loss')
-ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-ax.set(xlabel='Epoch')
-ax.set(ylabel='Loss')
+
+
 
 #Load all models and pickle their validation predictions
 model_names = os.listdir(C.model_dir)

@@ -19,6 +19,8 @@ import plotly.graph_objs as go
 import testing as T
 import config as C
 
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colours = prop_cycle.by_key()['color']
 
 def Average(lst):  #average of a list
     return sum(lst) / len(lst) 
@@ -378,8 +380,6 @@ def plot_class_vectors_scatter(vectors, classes, dims=[0,1,2]):
     """
     Creates a 3D scatterplot of the given classes in dictionary of vectors. 
     """
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colours = prop_cycle.by_key()['color']
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     #colours = ['blue', 'red', 'green']
@@ -398,9 +398,6 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
     """
     Creates a 3D plotly plot of the given classes in dictionary of vectors
     """
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colours = prop_cycle.by_key()['color']
-
     scatter = []
     cluster = []
     for i, c in enumerate(classes):
@@ -436,7 +433,97 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
     plot(fig, filename)
     return
 
-def plotly_animate():
+def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
+                   ax_lims=1.):
+    """ Create a kick-ass animation (3D) of cluster evolution during training """
+    vh = validation_history
+    its = list(vh)
+    its.sort()
+    if classes is None:
+        classes = list(vh[its[0]])
+    
+    #at step i:
+    #class c is:
+    #vh[i][c] - np array (100x64) - will plot the 1st 3 dims as demo
+    axl = ax_lims
+    
+    scatter = {}
+    cluster = {}
+    for e in its:
+        scatter[e] = [
+                dict(
+                mode = "markers",
+                name = c,
+                type = "scatter3d",    
+                x = vh[e][c][:,dims[0]], 
+                y = vh[e][c][:,dims[1]], 
+                z = vh[e][c][:,dims[2]],
+                marker = dict( size=2, color=colours[i%len(colours)])
+                ) for i, c in enumerate(classes)
+                ]
+        cluster[e] = [
+                dict(
+                alphahull = 5,
+                name = c, #"Cluster {}".format(i),
+                opacity = .1,
+                type = "mesh3d",    
+                x = vh[e][c][:,dims[0]], 
+                y = vh[e][c][:,dims[1]], 
+                z = vh[e][c][:,dims[2]],
+                color=colours[i%len(colours)], showscale = True
+                ) for i, c in enumerate(classes)
+                ]
+    #starting data:     
+    if mesh:
+        data = [*scatter[1], *cluster[1]]
+    else:
+        data = scatter[1]
+    #list of dicts of data items to update at each step  
+    if mesh:
+        frames=[dict(data = [*scatter[e], *cluster[e]],
+                     name = 'frame{}'.format(e)       
+                     ) for e in its]
+    else:
+        frames=[dict(data = scatter[e],
+                     name = 'frame{}'.format(e)       
+                     ) for e in its]
+                
+    sliders=[dict(steps= [dict(method= 'animate',#Sets the Plotly method to be called when the
+                                                    #slider value is changed.
+                               args= [['frame{}'.format(e)],#Sets the arguments values to be passed to 
+                                                                  #the Plotly method set in method on slide
+                                      dict(mode= 'immediate',
+                                           frame= dict(duration=300, redraw=False),
+                                           transition=dict(duration=300, easing='cubic-in-out')
+                                           )
+                                        ],
+                                label='{}'.format(e)
+                                 ) for e in its], 
+                    transition= dict(duration= 300, easing='cubic-in-out'),
+                    currentvalue=dict(font=dict(size=12), 
+                                      prefix='Step: ', 
+                                      visible=True, 
+                                      xanchor= 'center'
+                                     ),
+                    active=0,
+                    len=1.0)#slider length)
+               ]
+        
+    layout = dict(
+                title = 'Interactive Cluster Shapes in 3D, dims={}'.format(dims),
+                scene = dict(
+                        xaxis = dict(range=[axl, -axl], zeroline=True ),
+                        yaxis = dict(range=[axl, -axl], zeroline=True ),
+                        zaxis = dict(range=[-axl, axl], zeroline=True ),
+                        camera = dict(eye=dict(x=1.2, y=1.2, z=1.2)),
+                        aspectratio = dict(x=1, y=1, z=1),
+                        ),
+                sliders=sliders
+                )
+                        
+    fig=dict(data=data, layout=layout, frames=frames)
+    plot(fig, validate=False)
+    #plot(fig, validate=False)
     return
 
 
@@ -490,11 +577,15 @@ plot_class_vectors_plotly(ws_n, [classes[i] for i in range(10)])
 
 #Make an animation of validation predictions at different training epochs:
 #plotly.plotly.create_animations()
-import plotly.plotly as py
-from plotly.grid_objs import Grid, Column
 
-import time
+#init_notebook_mode(connected=True)
 
+vh = read_validation_history(obj_dir)
+classes = list(vh[1])[:6]
+plotly_animate(vh, classes=classes)
 
-
-
+#Make animation of svd of training val preds:
+vh = read_validation_history(obj_dir)
+wh = {i: svd_project(vh[i]) for i in vh}
+classes = list(wh[1])[:6]
+plotly_animate(wh, classes=classes, ax_lims=6)

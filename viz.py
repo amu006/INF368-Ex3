@@ -8,11 +8,13 @@ Visualisations for exercise 3
 """
 
 import os
+import shutil
 import numpy as np
 #from statistics import stdev
 from copy import deepcopy
 from keras.models import load_model
 import matplotlib.pyplot as plt
+import cv2
 from mpl_toolkits.mplot3d import Axes3D
 from plotly.offline import download_plotlyjs, init_notebook_mode,  iplot, plot
 import plotly.graph_objs as go
@@ -32,7 +34,20 @@ def stdev(lst):
     s = sum([x**2 for x in nlst])
     return np.sqrt(s/(len(lst)-1))
 
-def read_clusters(ldir=None):
+def pickle_model_predictions(model_dir=C.model_dir, tdir=C.val_dir, obj_dir=C.obj_dir):
+    """
+    Saves pickle files to obj_dir, of predictions for the data in tdir, for each model 
+    found in model_dir
+    """
+    model_names = os.listdir(model_dir)
+    for model_name in model_names:
+        print('Saving predictions from {}...'.format(model_name))
+        oname = model_name.split('.')[0]+'_val_pred'
+        T.save_model_predictions(os.path.join(C.model_dir,model_name), tdir=tdir, 
+                           ofile=os.path.join(obj_dir,oname))
+    return
+
+def read_clusters(ldir=C.log_dir):
     """
     Reads cluster log files from the given directory.
     Returns a nested dictionary of arrays of length (num files)
@@ -67,7 +82,7 @@ def read_clusters(ldir=None):
                     this_file[ci][cj + 1]
     return res
 
-def read_summaries(ldir=None):
+def read_summaries(ldir=C.log_dir):
     """
     Reads summary log files from the given directory
     Returns a dictionary with items:
@@ -344,7 +359,7 @@ def plot_confusion_matrix(cm,
     if cmap is None:
         cmap = plt.get_cmap('Blues')
 
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(24, 18))
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
     plt.colorbar()
@@ -526,66 +541,131 @@ def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
     #plot(fig, validate=False)
     return
 
+def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
+    """
+    Creates an animation of plots at all training steps
+    and saves to a movie file
+    
+    Inputs: 
+        plot_fn: function returning the pltos to be animated
+        out_file: movie output filename
+        arg_list: list of argument lists for plot_fn for each frame
+        kwarg_list: list of kwarg dictionaries for plot_fn for each frame
+        fps: frames per sec of the video desired
+    
+    with help from:
+    https://tsaith.github.io/combine-images-into-a-video-with-python-3-and-opencv-3.html
+    """
+    os.makedirs('tmp', exist_ok=True)
+    fnames = []
+    for i in range(len(kwarg_list)):
+        fig = plot_fn(*arg_list[i], **kwarg_list[i])
+        fname = 'tmp/anim_{}.png'.format(i)
+        fig.savefig(fname)
+        plt.close(fig)
+        fnames.append(fname)
+    if os.path.exists(out_file):
+        os.remove(out_file)
+    frame = cv2.imread(fnames[0])
+    #cv2.imshow('video',frame)
+    height, width, channels = frame.shape
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'XVID') # Be sure to use lower case
+    out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
+    for fname in fnames:
+        frame = cv2.imread(fname)
+        out.write(frame) # Write out frame to video
+        #cv2.imshow('video',frame)
+        if (cv2.waitKey(1) & 0xFF) == ord('q'): # Hit `q` to exit
+            break
+    # Release everything if job is finished
+    out.release()
+    cv2.destroyAllWindows()
+    print("Output video {} written".format(out_file))
+    #shutil.rmtree('tmp')
+    return
+    
+
+def animate_and_save_confusion(clust, 
+                               out_file='notebooks/images/conf_anim.avi',
+                               fps=5.0):
+    """
+    Saves an animation of the confusion matrix through training """
+    classes = list(clust)
+    N = len(clust[classes[0]][classes[0]])
+    arg_list = []
+    kwarg_list = []
+    for i in range(N):
+        #save the confusion plot
+        cmat, classes = confusion_matrix(clust, i)
+        fig = plot_confusion_matrix
+        arg_list.append([cmat, classes])
+        kwarg_list.append(dict(title='Confusion matrix for {}th iteration'.format(i+1),
+                                 cmap=None,
+                                 normalize=True)
+                                )
+    animate_and_save(plot_confusion_matrix, out_file, arg_list, kwarg_list, fps)
+    return
+
+def main():
+    pass
 
 ################################################################s
 #demos:
     
-clust = read_clusters()
-summ = read_summaries()
-
-#Plot the training progression of cluster radii:
-plot_train_radii(summ)
-
-#Plot the average cluster radius compared to the average cluster separation:
-plot_train_radii_separation(C.obj_dir)
-
-#Plot the training loss over epochs:
-plot_epoch_losses()        
-
-#Plot a confusion matrix
-i = 20
-cmat, classes = confusion_matrix(clusters, i-1)
-plot_confusion_matrix(cmat,
-                          classes,
+if __name__ == "__main__":
+    clust = read_clusters()
+    summ = read_summaries()
+    
+    #Plot the training progression of cluster radii:
+    plot_train_radii(summ)
+    
+    #Plot the average cluster radius compared to the average cluster separation:
+    plot_train_radii_separation(C.obj_dir)
+    
+    #Plot the training loss over epochs:
+    plot_epoch_losses()        
+    
+    #Plot a confusion matrix
+    i = 20
+    cmat, classes = confusion_matrix(clust, i-1)
+    plot_confusion_matrix(cm=cmat,
+                          target_names=classes,
                           title='Confusion matrix for {}th iteration'.format(i),
                           cmap=None,
                           normalize=True)
-
-
-
-
-#Load all models and pickle their validation predictions
-model_names = os.listdir(C.model_dir)
-for model_name in model_names:
-    oname = model_name.split('.')[0]+'_val_pred'
-    T.save_model_predictions(os.path.join(C.model_dir,model_name), tdir=C.val_dir, 
-                       ofile=os.path.join(C.obj_dir,oname))
-
-
     
+    #make animation of confusion matrixes through training process
+    animate_and_save_confusion(clust)
+    
+    
+    #Load all models and pickle their validation predictions
+    #pickle_model_predictions()
+    
+    #plot some classes' first 3 dimensions  
+    vs = dict_squeeze(T.load_obj('obj/111/val_pred_11'))
+    classes = [c for c in vs]        
+    plot_class_vectors_scatter(vs, [classes[i] for i in range(16)], 
+                                      dims=[0,1,2])    
+    
+    #plot some classes along 3 principal axes of overall data
+    ws_n = svd_project(vs)
+    plot_class_vectors_scatter(ws_n, [classes[i] for i in range(16)])
+    plot_class_vectors_plotly(ws_n, [classes[i] for i in range(10)])
+    
+    #Make an animation of validation predictions at different training epochs:
+    #plotly.plotly.create_animations()
+    
+    #init_notebook_mode(connected=True)
+    
+    vh = read_validation_history(obj_dir)
+    classes = list(vh[1])[:6]
+    plotly_animate(vh, classes=classes)
+    
+    #Make animation of svd of training val preds:
+    vh = read_validation_history(obj_dir)
+    wh = {i: svd_project(vh[i]) for i in vh}
+    classes = list(wh[1])[:6]
+    plotly_animate(wh, classes=classes, ax_lims=6)
 
-vs = dict_squeeze(T.load_obj('obj/111/val_pred_11'))
-classes = [c for c in vs]        
-#plot some classes' first 3 dimensions    
-plot_class_vectors_scatter(vs, [classes[i] for i in range(16)], 
-                                  dims=[0,1,2])    
-
-#plot some classes along 3 principal axes of overall data
-ws_n = svd_project(vs)
-plot_class_vectors_scatter(ws_n, [classes[i] for i in range(16)])
-plot_class_vectors_plotly(ws_n, [classes[i] for i in range(10)])
-
-#Make an animation of validation predictions at different training epochs:
-#plotly.plotly.create_animations()
-
-#init_notebook_mode(connected=True)
-
-vh = read_validation_history(obj_dir)
-classes = list(vh[1])[:6]
-plotly_animate(vh, classes=classes)
-
-#Make animation of svd of training val preds:
-vh = read_validation_history(obj_dir)
-wh = {i: svd_project(vh[i]) for i in vh}
-classes = list(wh[1])[:6]
-plotly_animate(wh, classes=classes, ax_lims=6)
+    main()

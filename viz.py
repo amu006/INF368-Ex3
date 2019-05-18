@@ -590,7 +590,7 @@ def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
     out.release()
     cv2.destroyAllWindows()
     print("Output video {} written".format(out_file))
-    #shutil.rmtree('tmp')
+    shutil.rmtree('tmp')
     return
     
 

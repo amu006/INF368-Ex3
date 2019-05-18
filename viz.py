@@ -316,7 +316,8 @@ def plot_confusion_matrix(cm,
                           target_names,
                           title='Confusion matrix',
                           cmap=None,
-                          normalize=True):
+                          normalize=True,
+                          figsize=(12,8)):
     """
     given a sklearn confusion matrix (cm), make a nice plot
 
@@ -359,7 +360,7 @@ def plot_confusion_matrix(cm,
     if cmap is None:
         cmap = plt.get_cmap('Blues')
 
-    fig = plt.figure(figsize=(24, 18))
+    fig = plt.figure(figsize=figsize)
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
     plt.colorbar()
@@ -405,11 +406,13 @@ def plot_class_vectors_scatter(vectors, classes, dims=[0,1,2]):
         tmp = vectors[c]
         ax.scatter(tmp[:, dims[0]], 
                    tmp[:, dims[1]], 
-                   tmp[:, dims[2]], color=colours[i%len(colours)])
+                   tmp[:, dims[2]], color=colours[i%len(colours)], label=c)
+    ax.set(xlabel='dim'+str(dims[0]), ylabel='dim'+str(dims[1]), zlabel='dim'+str(dims[2]))
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     return fig
 
 def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
-                              filename='mesh3d_sample'):
+                              filename='mesh3d_sample', notebook=False):
     """
     Creates a 3D plotly plot of the given classes in dictionary of vectors
     """
@@ -445,11 +448,14 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
             )
     fig = dict( data=[*scatter, *cluster], layout=layout )
     # Use py.iplot() for IPython notebook
-    plot(fig, filename)
+    if notebook:
+        iplot(fig, filename)
+    else:
+        plot(fig, filename)
     return
 
 def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
-                   ax_lims=1.):
+                   ax_lims=1., notebook=False):
     """ Create a kick-ass animation (3D) of cluster evolution during training """
     vh = validation_history
     its = list(vh)
@@ -537,8 +543,10 @@ def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
                 )
                         
     fig=dict(data=data, layout=layout, frames=frames)
-    plot(fig, validate=False)
-    #plot(fig, validate=False)
+    if notebook:
+        iplot(fig, validate=False)
+    else:
+        plot(fig, validate=False)
     return
 
 def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
@@ -570,7 +578,7 @@ def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
     #cv2.imshow('video',frame)
     height, width, channels = frame.shape
     # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'XVID') # Be sure to use lower case
+    fourcc = cv2.VideoWriter_fourcc(*'MP4V') # Be sure to use lower case
     out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
     for fname in fnames:
         frame = cv2.imread(fname)
@@ -587,7 +595,7 @@ def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
     
 
 def animate_and_save_confusion(clust, 
-                               out_file='notebooks/images/conf_anim.avi',
+                               out_file='notebooks/images/conf_anim.mp4',
                                fps=5.0):
     """
     Saves an animation of the confusion matrix through training """

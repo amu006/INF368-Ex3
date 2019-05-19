@@ -129,9 +129,10 @@ def read_summaries(ldir=C.log_dir):
                     this_file[ci][cj + 2]
     return res
 
-def read_validation_history(obj_dir=C.obj_dir):
+def read_validation_history(obj_dir=C.obj_dir, prefix='val_pred'):
     """ load all pickled validation predictions """
-    obj_names = [o.split('.')[-2] for o in os.listdir(obj_dir)]
+    names = [o.split('.')[-2] for o in os.listdir(obj_dir)]
+    obj_names =  [n for n in names if n[:8]==prefix]
     its = [int(name.split('_')[-1]) for name in obj_names] #iteration numbers
     vect_hist = {}
     for n, i in enumerate(its):
@@ -205,14 +206,22 @@ def standardise_vectors(vs, reference_classes=None):
         vs_n[c] = (np.squeeze(vs[c]) - X_mean) / X_std
     return vs_n, X_mean, X_std
 
-def svd_project(vs, reference_classes=None):
+def svd_project(vs, reference_classes=None, return_items=False, from_U=False):
     """
     Projects all vectors onto the left singular vector basis
     (basis is computed on reference_classes)
+
+    If return_items list is populated with any of the following names:
+        'U', 'S', 'Vh', 'X_mean', 'X_std', 
+        then these are also returned in a dictionary.
+        (Note. Eval behaved strangely. So I just return the lot.)
+
+    If from_U is specified (as an orthogonal transformation matrix),
+    the SVD is bypassed and  the standardised data is simply transformed by U.
     """
     if reference_classes is None:
         reference_classes = [c for c in vs]
-    vs_n, X_mean, X_std = standardise_vectors(vs, reference_classes)
+    vs_n, X_mean, X_std = standardise_vectors(vs, reference_classes) 
     X, y = collect_class_vs(vs_n, reference_classes)
     U, S, Vh = np.linalg.svd(X.T, full_matrices=False)
     #X.T has columns=data 64-vectors
@@ -223,7 +232,15 @@ def svd_project(vs, reference_classes=None):
     ##ws_n = {}
     ##for c in classes:
     ##    ws_n[c] = vs_n[c] @ U
-    return {c: vs_n[c] @ U for c in vs_n}        
+    if from_U:
+        res = {c: vs_n[c] @ from_U for c in vs_n}
+    else:
+        res = {c: vs_n[c] @ U for c in vs_n}        
+    if return_items:
+        return_dict = {'U': U, 'X_mean': X_mean, 'X_std': X_std}
+        return res, return_dict
+    else:
+        return res
         
 
 #plotting:
@@ -907,14 +924,88 @@ if __name__ == "__main__":
     
     #init_notebook_mode(connected=True)
     
-    vh = read_validation_history(obj_dir)
+    vh = read_validation_history()
     classes = list(vh[1])[:6]
     plotly_animate(vh, classes=classes)
     
     #Make animation of svd of training val preds:
-    vh = read_validation_history(obj_dir)
+    vh = read_validation_history()
     wh = {i: svd_project(vh[i]) for i in vh}
     classes = list(wh[1])[:6]
     plotly_animate(wh, classes=classes, ax_lims=6)
     plotly_animate_circles(wh, classes=classes, ax_lims=6)
+
+    #Train alternative classifiers on the validation data, test on test data.
+    #prepare data:
+    from sklearn.svm import SVC, LinearSVC
+    from sklearn import tree
+    from sklearn.preprocessing import LabelBinarizer, LabelEncoder
+    from sklearn.metrics import accuracy_score
+
+    classes = list(vh[19])
+    X_val, y_val = collect_class_vs(vh[19])
+    lb = LabelBinarizer()
+    le = LabelEncoder()
+    lb.fit(classes)
+    le.fit(classes)
+    y_val_enc = le.transform(y_val)
+    Y_val = lb.transform(y_val)
+
+
+    #generate the test vectors using CNN:
+    cnn_name = 'epoch_19.model'
+    oname = cnn_name.split('.')[0]+'_test_pred'
+    ofile = os.path.join(C.obj_dir,oname)
+    T.save_model_predictions(os.path.join(C.model_dir,cnn_name), tdir=C.test_dir, 
+                            ofile=ofile)
+    test = T.load_obj(ofile)
+    X_test, y_test = collect_class_vs(test)
+    y_test_enc = le.transform(y_test)
+
+    #Decision tree
+    model_tree = tree.DecisionTreeClassifier()
+    model_tree.fit(X_val, Y_val)
+    Y_test = lb.transform(y_test)
+    Y_test_pred = model_tree.predict(X_test)
+    train_acc = accuracy_score(Y_val, model_tree.predict(X_val))
+    test_acc = accuracy_score(Y_test, Y_test_pred)
+    print('Train / Test accuracy decision tree = {} / {}'.format(train_acc,test_acc))
+
+    #SVM
+    model_svm = SVC(kernel='linear')
+    model_svm.fit(X_val, y_val_enc)
+    y_test_pred = model_svm.predict(X_test)
+    train_acc = accuracy_score(y_val_enc, model_svm.predict(X_val))
+    test_acc = accuracy_score(y_test_enc, y_test_pred)
+    print('Train / Test accuracy  linear SVC= {} / {}'.format(train_acc, test_acc))
+
+    #SVM with RBF
+    model_svm_rbf = SVC(kernel='rbf', C=1E-7, probability=True)
+    model_svm_rbf.fit(X_val, y_val_enc)
+    y_test_pred = model_svm_rbf.predict(X_test)
+    train_acc = accuracy_score(y_val_enc, model_svm_rbf.predict(X_val))
+    test_acc = accuracy_score(y_test_enc, y_test_pred)
+    print('Train / Test accuracy RBF SVC = {} / {}'.format(train_acc, test_acc))
+
+    #SVM with RBF on SVD-transformed data
+    wh, items = svd_project(vh[19], return_items=True) 
+    Z_val, y_val = collect_class_vs(wh)
+    y_val_enc = le.transform(y_val)
+    model_svm_svd = SVC(kernel='rbf', C=1E-7, probability=True)
+    model_svm_svd.fit(Z_val, y_val_enc)
+    #convert test data, with the  normalisation and transformation from the training data
+    X_mean = items['X_mean']
+    X_std = items['X_std']
+    test_n = {}
+    for c in test: #for all classes:
+        test_n[c] = (np.squeeze(test[c]) - X_mean) / X_std
+    Z_test, y_test = collect_class_vs(test_n)
+    Z_test = Z_test @ items['U']
+    y_test_enc = le.transform(y_test)
+    y_test_pred = model_svm_svd.predict(Z_test)
+    train_acc = accuracy_score(y_val_enc, model_svm_svd.predict(Z_val))
+    test_acc = accuracy_score(y_test_enc, y_test_pred)
+    print('Train / Test accuracy  RBF SVC  with SVD = {} / {}'.format(train_acc, test_acc))
+
+
     main()

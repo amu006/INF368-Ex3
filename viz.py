@@ -549,6 +549,247 @@ def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
         plot(fig, validate=False)
     return
 
+def plotly_animate_spheres(validation_history, classes=None, dims=[0,1],
+                   ax_lims=1., notebook=False):
+    """ 
+    Create a kick-ass animation (3D) of cluster evolution during training, representing
+    the clusters as spheres for clarity and speed   
+    """
+    vh = validation_history
+    its = list(vh)
+    its.sort()
+    if classes is None:
+        classes = list(vh[its[0]])
+    
+    #at step i:
+    #class c is:
+    #vh[i][c] - np array (100x64) - will plot the 1st 3 dims as demo
+    axl = ax_lims
+
+    #calculate centroids and radii:
+    cent = {}
+    rads = {}
+
+    circles = {}
+    for e in its:
+        cent[e] = {c: T.centroid(dict_unsqueeze(vh[e])[c]) for c in classes}
+        rads[e] = {c: T.radius(cent[e][c], dict_unsqueeze(vh[e])[c]) for c in classes}
+        circles[e] = [
+                dict(
+                text=c,
+                name=c,
+                mode='markers',
+                x=[cent[e][c][dims[0]]],
+                y=[cent[e][c][dims[1]]],
+                marker = dict(color=colours[i%len(colours)],
+                            size=rads[e][c]*100,
+                            ),
+                ) for i, c in enumerate(classes)
+                ]
+    #starting data:     
+    data = circles[1]
+    #list of dicts of data items to update at each step  
+    frames=[dict(data = circles[e],
+                     name = 'frame{}'.format(e)       
+                     ) for e in its]
+                
+    sliders=[dict(steps= [dict(method= 'animate',#Sets the Plotly method to be called when the
+                                                    #slider value is changed.
+                               args= [['frame{}'.format(e)],#Sets the arguments values to be passed to 
+                                                                  #the Plotly method set in method on slide
+                                      dict(mode= 'immediate',
+                                           frame= dict(duration=300, redraw=False),
+                                           transition=dict(duration=300, easing='cubic-in-out')
+                                           )
+                                        ],
+                                label='{}'.format(e)
+                                 ) for e in its], 
+                    transition= dict(duration= 300, easing='cubic-in-out'),
+                    currentvalue=dict(font=dict(size=12), 
+                                      prefix='Step: ', 
+                                      visible=True, 
+                                      xanchor= 'center'
+                                     ),
+                    active=0,
+                    len=1.0)#slider length)
+               ]
+        
+    layout = dict(
+                title = 'Interactive Cluster Shapes, dims={}'.format(dims),
+                xaxis = dict(range=[-axl, axl], zeroline=True),
+                yaxis = dict(range=[-axl, axl], zeroline=True),
+                sliders=sliders,
+                )
+                        
+    fig=dict(data=data, layout=layout, frames=frames)
+    if notebook:
+        iplot(fig, validate=False)
+    else:
+        plot(fig, validate=False)
+    return
+
+def plot_spheres(x, y, z, c, r):
+    """ 
+    Plots spheres representing the clusters in 3D 
+
+    Inputs:
+        x = 1D array or list of x centre values
+        y = 1D array or list of y centre values
+        z = 1D array or list of z centre values
+        c = 1D array or list of colour values
+        r = 1D array or list of radius values
+    """
+    def drawSphere(xCenter, yCenter, zCenter, r):
+        #draw sphere
+        u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+        x=np.cos(u)*np.sin(v)
+        y=np.sin(u)*np.sin(v)
+        z=np.cos(v)
+        # shift and scale sphere
+        x = r*x + xCenter
+        y = r*y + yCenter
+        z = r*z + zCenter
+        return (x,y,z)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # draw a sphere for each data point
+    for (xi,yi,zi,ri) in zip(x,y,z,r):
+        (xs,ys,zs) = drawSphere(xi,yi,zi,ri)
+        ax.plot_wireframe(xs, ys, zs, color="r")
+
+    return fig
+
+def plotly_sphere(x0, y0, z0, r, c, n=25,
+        colorscale='Jet', cmin=1, cmax=27):
+    #todo: modify to spheroid
+    if type(r) is float:
+        r = [r,r,r]
+    theta = np.linspace(0,2*np.pi,n)
+    phi = np.linspace(0,np.pi,n)
+    x = x0 + r[0]*np.outer(np.cos(theta),np.sin(phi))
+    y = y0 + r[1]*np.outer(np.sin(theta),np.sin(phi))
+    z = z0 + r[2]*np.outer(np.ones(n),np.cos(phi))  # note this is 2d now
+
+    data = go.Surface(
+                        x=x,
+                        y=y,
+                        z=z,
+                        surfacecolor=c*np.ones(x.shape),
+                        colorscale=colorscale,
+                        cmin=cmin, 
+                        cmax=cmax,
+                        )
+    return data
+
+def plotly_spheres(validation_history, classes, dims=[0,1,2],
+                   ax_lims=1., notebook=False, n=25):
+    vh = validation_history
+    its = list(vh)
+    its.sort()
+    if classes is None:
+        classes = list(vh[its[0]])
+    
+    #at step i:
+    #class c is:
+    #vh[i][c] - np array (100x64) - will plot the 1st 3 dims as demo
+    axl = ax_lims
+
+    #calculate centroids and radii:
+    cent = {}
+    rads = {}
+
+    circles = {}
+    for e in its:
+        cent[e] = {c: T.centroid(dict_unsqueeze(vh[e])[c]) for c in classes}
+        rads[e] = {c: T.radius_nd(cent[e][c], dict_unsqueeze(vh[e])[c]) for c in classes}
+        circles[e] = [
+                plotly_sphere([cent[e][c][dims[0]]],
+                               [cent[e][c][dims[1]]],
+                                [cent[e][c][dims[2]]],
+                                r=rads[e][c], 
+                                c=i, #colours[i%len(colours)],
+                                colorscale='Jet',
+                                cmin=1,
+                                cmax=len(classes)+1,
+                                n=n) for i, c in enumerate(classes)
+                ]
+    #starting data:     
+    data = circles[1]
+    #list of dicts of data items to update at each step  
+    frames=[dict(data = circles[e],
+                     name = 'frame{}'.format(e)       
+                     ) for e in its]
+    transition = dict(duration=300, easing='cubic-in-out')
+    sliders=[dict(steps= [dict(method= 'animate',#Sets the Plotly method to be called when the
+                                                    #slider value is changed.
+                               args= [['frame{}'.format(e)],#Sets the arguments values to be passed to 
+                                                                  #the Plotly method set in method on slide
+                                      dict(mode= 'immediate',
+                                           frame= dict(duration=500, redraw=False),
+                                           transition={'duration': 300},
+                                           )
+                                        ],
+                                label='{}'.format(e)
+                                 ) for e in its], 
+                    transition= transition,
+                    currentvalue=dict(font=dict(size=12), 
+                                      prefix='Step: ', 
+                                      visible=True, 
+                                      xanchor= 'center'
+                                     ),
+                    visible=True,
+                    active=0,
+                    pad={'b': 10, 't': 30},
+                    x=0.1,
+                    y=0,
+                    len=1.0)#slider length)
+               ]
+        
+    layout = go.Layout(
+                title = 'Interactive 3D Cluster Shapes, dims={}'.format(dims),
+                scene = dict(
+                        xaxis = dict(range=[-axl, axl], zeroline=True),
+                        yaxis = dict(range=[-axl, axl], zeroline=True),
+                        zaxis = dict(range=[-axl, axl], zeroline=True),
+                        #camera = dict(eye=dict(x=axl, y=axl, z=axl)),
+                        aspectratio = dict(x=1, y=1, z=1),
+                        ),
+                sliders=sliders,
+                updatemenus=[{
+                            'buttons': [
+                                {
+                                    'args': [None, {'frame': {'duration': 500, 'redraw': False},
+                                            'fromcurrent': True, 'transition': transition}],
+                                    'label': 'Play',
+                                    'method': 'animate'
+                                },
+                                {
+                                    'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
+                                    'transition': {'duration': 0}}],
+                                    'label': 'Pause',
+                                    'method': 'animate'
+                                }
+                            ],
+                            'direction': 'left',
+                            'pad': {'r': 10, 't': 87},
+                            'showactive': False,
+                            'type': 'buttons',
+                            'x': 0.1,
+                            'xanchor': 'right',
+                            'y': 0,
+                            'yanchor': 'top'
+                        }]
+                )
+                        
+    fig=dict(data=data, layout=layout, frames=frames)
+    if notebook:
+        iplot(fig, validate=False)
+    else:
+        plot(fig, validate=False)
+    return
+
 def animate_and_save(plot_fn, out_file, arg_list, kwarg_list, fps=5.0):
     """
     Creates an animation of plots at all training steps
@@ -675,5 +916,5 @@ if __name__ == "__main__":
     wh = {i: svd_project(vh[i]) for i in vh}
     classes = list(wh[1])[:6]
     plotly_animate(wh, classes=classes, ax_lims=6)
-
+    plotly_animate_circles(wh, classes=classes, ax_lims=6)
     main()

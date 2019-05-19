@@ -66,6 +66,13 @@ def radius(c, vs, avg=True):
     else:
         return max(ds)
 
+def radius_nd(c, vs, avg=True):
+    ds = [c - v for v in vs]
+    if avg:
+        return [np.mean(np.abs([d[i] for d in ds])) for i in range(len(c))]
+    else:
+        return [np.max(np.abs([d[i] for d in ds])) for i in range(len(c))]
+
 # for backwards compatibility
 def centroid_distances(vectors, outfile=sys.stdout):
     # load a bunch of images, calculate outputs

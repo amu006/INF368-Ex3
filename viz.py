@@ -149,6 +149,7 @@ def confusion_matrix(clusters, iteration):
     #ni = len(clusters[list(clusters)[0]][list(clusters)[0]])
     cmat = np.zeros((nc, nc), dtype=np.int32)
     classes = [c for c in clusters]
+    classes.sort()
     for i in range(len(classes)):
         for j in range(len(classes)):
             cmat[i,j] = clusters[classes[i]][classes[j]][iteration]
@@ -183,6 +184,7 @@ def collect_class_vs(vectors, classes=None):
     """ Collects vectors in given classes list together for analysis """
     if classes is None:
         classes = [c for c in vectors]
+    classes.sort()
     X = np.squeeze(np.concatenate([vectors[c] for c in classes]))
     #X is a master list of all vectors of these classes
     y = np.concatenate([[c]*len(vectors[c]) for c in classes])
@@ -195,6 +197,7 @@ def standardise_vectors(vs, reference_classes=None):
     """
     if reference_classes is None:
         reference_classes = [c for c in vs]
+    reference_classes.sort()
     X, y = collect_class_vs(vs, reference_classes)
     X_mean = np.expand_dims(np.mean(X, axis=0), axis=0)
     X_std = np.expand_dims(np.std(X, axis=0), axis=0)
@@ -221,6 +224,7 @@ def svd_project(vs, reference_classes=None, return_items=False, from_U=False):
     """
     if reference_classes is None:
         reference_classes = [c for c in vs]
+    reference_classes.sort()
     vs_n, X_mean, X_std = standardise_vectors(vs, reference_classes) 
     X, y = collect_class_vs(vs_n, reference_classes)
     U, S, Vh = np.linalg.svd(X.T, full_matrices=False)
@@ -413,6 +417,7 @@ def plot_class_vectors_scatter(vectors, classes, dims=[0,1,2]):
     """
     Creates a 3D scatterplot of the given classes in dictionary of vectors. 
     """
+    classes.sort()
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     #colours = ['blue', 'red', 'green']
@@ -433,6 +438,7 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
     """
     Creates a 3D plotly plot of the given classes in dictionary of vectors
     """
+    classes.sort()
     scatter = []
     cluster = []
     for i, c in enumerate(classes):
@@ -453,7 +459,7 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
             x = vectors[c][:,dims[0]], 
             y = vectors[c][:,dims[1]], 
             z = vectors[c][:,dims[2]],
-            color=colours[i%len(colours)], showscale = True
+            color=colours[i%len(colours)], showscale = False
             ))
     layout = dict(
             title = 'Interactive Cluster Shapes in 3D, dims={}'.format(dims),
@@ -461,7 +467,8 @@ def plot_class_vectors_plotly(vectors, classes, dims=[0,1,2],
                     xaxis = dict( zeroline=True ),
                     yaxis = dict( zeroline=True ),
                     zaxis = dict( zeroline=True ),
-                    )
+                    ),
+            legend = dict(itemsizing='constant'),
             )
     fig = dict( data=[*scatter, *cluster], layout=layout )
     # Use py.iplot() for IPython notebook
@@ -479,6 +486,7 @@ def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
     its.sort()
     if classes is None:
         classes = list(vh[its[0]])
+    classes.sort()
     
     #at step i:
     #class c is:
@@ -556,7 +564,8 @@ def plotly_animate(validation_history, classes=None, mesh=True, dims=[0,1,2],
                         camera = dict(eye=dict(x=1.2, y=1.2, z=1.2)),
                         aspectratio = dict(x=1, y=1, z=1),
                         ),
-                sliders=sliders
+                sliders=sliders,
+                legend = dict(itemsizing='constant'),
                 )
                         
     fig=dict(data=data, layout=layout, frames=frames)
@@ -577,7 +586,7 @@ def plotly_animate_spheres(validation_history, classes=None, dims=[0,1],
     its.sort()
     if classes is None:
         classes = list(vh[its[0]])
-    
+    classes.sort()
     #at step i:
     #class c is:
     #vh[i][c] - np array (100x64) - will plot the 1st 3 dims as demo
@@ -636,6 +645,31 @@ def plotly_animate_spheres(validation_history, classes=None, dims=[0,1],
                 xaxis = dict(range=[-axl, axl], zeroline=True),
                 yaxis = dict(range=[-axl, axl], zeroline=True),
                 sliders=sliders,
+                legend = dict(itemsizing='constant'),
+                updatemenus=[{
+                            'buttons': [
+                                {
+                                    'args': [None, {'frame': {'duration': 500, 'redraw': False},
+                                            'fromcurrent': True, 'transition': transition}],
+                                    'label': 'Play',
+                                    'method': 'animate'
+                                },
+                                {
+                                    'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
+                                    'transition': {'duration': 0}}],
+                                    'label': 'Pause',
+                                    'method': 'animate'
+                                }
+                            ],
+                            'direction': 'left',
+                            'pad': {'r': 10, 't': 87},
+                            'showactive': False,
+                            'type': 'buttons',
+                            'x': 0.1,
+                            'xanchor': 'right',
+                            'y': 0,
+                            'yanchor': 'top'
+                        }]
                 )
                         
     fig=dict(data=data, layout=layout, frames=frames)
@@ -678,7 +712,7 @@ def plot_spheres(x, y, z, c, r):
 
     return fig
 
-def plotly_sphere(x0, y0, z0, r, c, n=25,
+def plotly_sphere(x0, y0, z0, r, c, name, n=25,
         colorscale='Jet', cmin=1, cmax=27):
     #todo: modify to spheroid
     if type(r) is float:
@@ -689,7 +723,8 @@ def plotly_sphere(x0, y0, z0, r, c, n=25,
     y = y0 + r[1]*np.outer(np.sin(theta),np.sin(phi))
     z = z0 + r[2]*np.outer(np.ones(n),np.cos(phi))  # note this is 2d now
 
-    data = go.Surface(
+    data = go.Surface(  name=name,
+                        text=name,
                         x=x,
                         y=y,
                         z=z,
@@ -707,7 +742,7 @@ def plotly_spheres(validation_history, classes, dims=[0,1,2],
     its.sort()
     if classes is None:
         classes = list(vh[its[0]])
-    
+    classes.sort()
     #at step i:
     #class c is:
     #vh[i][c] - np array (100x64) - will plot the 1st 3 dims as demo
@@ -727,6 +762,7 @@ def plotly_spheres(validation_history, classes, dims=[0,1,2],
                                 [cent[e][c][dims[2]]],
                                 r=rads[e][c], 
                                 c=i, #colours[i%len(colours)],
+                                name=c,
                                 colorscale='Jet',
                                 cmin=1,
                                 cmax=len(classes)+1,
@@ -774,6 +810,7 @@ def plotly_spheres(validation_history, classes, dims=[0,1,2],
                         aspectratio = dict(x=1, y=1, z=1),
                         ),
                 sliders=sliders,
+                legend = dict(itemsizing='constant'),
                 updatemenus=[{
                             'buttons': [
                                 {
@@ -858,6 +895,7 @@ def animate_and_save_confusion(clust,
     """
     Saves an animation of the confusion matrix through training """
     classes = list(clust)
+    classes.sort()
     N = len(clust[classes[0]][classes[0]])
     arg_list = []
     kwarg_list = []
@@ -910,7 +948,8 @@ if __name__ == "__main__":
     
     #plot some classes' first 3 dimensions  
     vs = dict_squeeze(T.load_obj('obj/111/val_pred_11'))
-    classes = [c for c in vs]        
+    classes = [c for c in vs]    
+    classes.sort()    
     plot_class_vectors_scatter(vs, [classes[i] for i in range(16)], 
                                       dims=[0,1,2])    
     
@@ -939,10 +978,16 @@ if __name__ == "__main__":
     #prepare data:
     from sklearn.svm import SVC, LinearSVC
     from sklearn import tree
+    from sklearn import cluster
     from sklearn.preprocessing import LabelBinarizer, LabelEncoder
     from sklearn.metrics import accuracy_score
+    from sklearn.metrics import confusion_matrix as conf_mat
+    from viz import *
+    import config as C
+    import testing as T
 
     classes = list(vh[19])
+    classes.sort()
     X_val, y_val = collect_class_vs(vh[19])
     lb = LabelBinarizer()
     le = LabelEncoder()
@@ -952,12 +997,12 @@ if __name__ == "__main__":
     Y_val = lb.transform(y_val)
 
 
-    #generate the test vectors using CNN:
+    ##load test vectors / generate test vectors using CNN:
     cnn_name = 'epoch_19.model'
     oname = cnn_name.split('.')[0]+'_test_pred'
     ofile = os.path.join(C.obj_dir,oname)
-    T.save_model_predictions(os.path.join(C.model_dir,cnn_name), tdir=C.test_dir, 
-                            ofile=ofile)
+    #T.save_model_predictions(os.path.join(C.model_dir,cnn_name), tdir=C.test_dir, 
+    #                        ofile=ofile)
     test = T.load_obj(ofile)
     X_test, y_test = collect_class_vs(test)
     y_test_enc = le.transform(y_test)
@@ -969,7 +1014,7 @@ if __name__ == "__main__":
     Y_test_pred = model_tree.predict(X_test)
     train_acc = accuracy_score(Y_val, model_tree.predict(X_val))
     test_acc = accuracy_score(Y_test, Y_test_pred)
-    print('Train / Test accuracy decision tree = {} / {}'.format(train_acc,test_acc))
+    print('Train / Test accuracy decision tree      = {:.2%} / {:.2%}'.format(train_acc,test_acc))
 
     #SVM
     model_svm = SVC(kernel='linear')
@@ -977,7 +1022,7 @@ if __name__ == "__main__":
     y_test_pred = model_svm.predict(X_test)
     train_acc = accuracy_score(y_val_enc, model_svm.predict(X_val))
     test_acc = accuracy_score(y_test_enc, y_test_pred)
-    print('Train / Test accuracy  linear SVC= {} / {}'.format(train_acc, test_acc))
+    print('Train / Test accuracylinear SVC          = {:.2%} / {:.2%}'.format(train_acc, test_acc))
 
     #SVM with RBF
     model_svm_rbf = SVC(kernel='rbf', C=1E-7, probability=True)
@@ -985,7 +1030,7 @@ if __name__ == "__main__":
     y_test_pred = model_svm_rbf.predict(X_test)
     train_acc = accuracy_score(y_val_enc, model_svm_rbf.predict(X_val))
     test_acc = accuracy_score(y_test_enc, y_test_pred)
-    print('Train / Test accuracy RBF SVC = {} / {}'.format(train_acc, test_acc))
+    print('Train / Test accuracy RBF SVC            = {:.2%} / {:.2%}'.format(train_acc, test_acc))
 
     #SVM with RBF on SVD-transformed data
     wh, items = svd_project(vh[19], return_items=True) 
@@ -1005,7 +1050,63 @@ if __name__ == "__main__":
     y_test_pred = model_svm_svd.predict(Z_test)
     train_acc = accuracy_score(y_val_enc, model_svm_svd.predict(Z_val))
     test_acc = accuracy_score(y_test_enc, y_test_pred)
-    print('Train / Test accuracy  RBF SVC  with SVD = {} / {}'.format(train_acc, test_acc))
+    print('Train / Test accuracy  RBF SVC  with SVD = {:.2%} / {:.2%}'.format(train_acc, test_acc))
 
+    #K-means clustering (unsupervised)
+    classes = list(vs)
+    classes.sort()
+    n_clusters = len(classes)
+    centersSKL = cluster.MiniBatchKMeans(n_clusters)
+    centersSKL.fit(X_val) 
+    y_pred = centersSKL.predict(X_val)
+    #identify the clusters by class (hopefully)
+    centroids = {} #for the predicted clusters
+    radii = {}
+    #find centroids, radii of detected clusters
+    for k in set(y_pred):
+        k_vecs = [X_val[i, :] for i in range(len(y_pred)) if y_pred[i]==k]
+        centroids[k] = T.centroid(k_vecs)
+        radii[k] = T.radius(centroids[k], k_vecs)
+    #find centroids, radii of the true classes
+    centroids_actual = {} 
+    radii_actual = {}
+    for k in set(y_val):
+        c_vecs = [X_val[i, :] for i in range(len(y_val)) if y_val[i]==k]
+        centroids_actual[k] = T.centroid(c_vecs)
+        radii_actual[k] = T.radius(centroids_actual[k], c_vecs)
+    cent_list = [centroids_actual[c] for c in classes]
+    rad_list = [radii_actual[c] for c in classes]
+    #match each detected cluster to closest class 
+    #by minimising L2 norm of (centroid; radius) difference
+    def cluster_metric(c1, c2, r1, r2):
+        return T.dist(c1, c2) + T.dist(r1,r2)
+    def find_nearest_cluster(centroid, radius, centroid_list, radius_list):
+        (c1, r1) = (centroid, radius)
+        return np.argmin([cluster_metric(c1,centroid_list[i],r1,radius_list[i]) for i in range(len(radius_list))])
+    k_map = {}
+    for k in centroids: #cluster number
+        best_i = find_nearest_cluster(centroids[k], radii[k], cent_list, rad_list)
+        k_map[k] = classes[best_i]
+    c_map = {c:k for k,c in k_map.items()} 
+    #training score:
+    y_pred_cls = [k_map[k] for k in y_pred] #classes
+    y_pred_enc = le.transform(y_pred_cls) #numbers
+    train_acc = accuracy_score(y_val_enc, y_pred_enc)
+    #test score:
+    y_pred_cls = [k_map[k] for k in centersSKL.predict(X_test)]
+    y_test_pred = le.transform(y_pred_cls) #numbers
+    X_test, y_test = collect_class_vs(test) #get fresh y_test vectors
+    y_test_enc = le.transform(y_test)
+    test_acc = accuracy_score(y_test_enc, y_test_pred)
+    print('Train / Test accuracy K-means = {:.2%} / {:.2%}'.format(train_acc, test_acc))
 
+    from sklearn.metrics import confusion_matrix as conf_mat
+    cm = conf_mat(y_test_enc, y_test_pred)
+    fig = plot_confusion_matrix(cm,
+                            classes,
+                            title='Confusion matrix, ',
+                            cmap=None,
+                            normalize=True,
+                            figsize=(12,8))
+    fig.savefig('notebooks/images/best_confusion.png')
     main()
